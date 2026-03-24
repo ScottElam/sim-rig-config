@@ -1,0 +1,33 @@
+# ── Secrets & credentials ──────────────────────────────────────────────────
+*.key
+*.pem
+*.env
+secrets.*
+*password*
+*license*
+*serial*
+
+# ── LMU — files that embed personal account paths or license info ───────────
+lmu/config/player.json
+lmu/config/PlayerCustomization.json
+
+# ── OBS — exclude profile files that may contain stream keys ───────────────
+obs/config/basic/profiles/**/service.json
+
+# ── iCUE — exclude files with machine-specific GUIDs ──────────────────────
+icue/config/*.bak
+
+# ── Mac ────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ── Windows ────────────────────────────────────────────────────────────────
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ── Editors ────────────────────────────────────────────────────────────────
+*.swp
+*~
+.vscode/
