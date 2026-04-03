@@ -2,6 +2,8 @@
 
 PowerShell scripts and notes for OS hardening, service trimming, and performance tuning.
 
+This readme is deprecated, see readme in parent directory.
+
 ## Scripts
 
 | File | Purpose |
