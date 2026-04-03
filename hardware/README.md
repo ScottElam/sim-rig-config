@@ -12,10 +12,13 @@
 | AIO | Corsair Titan AIO | — | Push/pull on top radiator |
 | PSU | Corsair HX1000i | 1000W | Zero RPM mode: enabled |
 | Storage | _fill in_ | — | — |
+| Monitors | 3 x MSI 32" 1440p | MAG 32CQ6F | WQHD, 180hz, 0.5ms, HDR400, curved 1500R |
 | Wheel Base | Fanatec ClubSport | — | — |
 | Wheel | Fanatec ClubSport Formula V2.5 | — | — |
 | Pedals | _fill in_ | — | — |
 | Stream Deck | Elgato Stream Deck | _model_ | — |
+| Sim Rig | Advanced Sim Racing 3 | | Aluminum Profile |
+| Monitor Mount | Sim-Lab Triple with Quad Monitor Mount | | Set monitor mount arms at 60deg |
 
 ## Firmware / Driver Versions
 
