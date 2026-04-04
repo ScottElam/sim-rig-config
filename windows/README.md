@@ -13,6 +13,11 @@ Windows 11 optimisation and hardening scripts for a high-performance sim-racing 
 | Case | Corsair Air 5400 |
 | Displays | Triple 2K @ 180 Hz |
 
+## Free Alternatives
+| https://christitus.com/downloads/ | $10 - Chris Titus, performance, privacy, security, anti-bloat, custom iso, SW update, etc. |
+| https://www.hellzerg.com/ | Gaming focus, with privacy |
+| https://www.oo-software.com/en/shutup10/features | Privacy and Security focus |
+
 ## Software Stack
 
 Le Mans Ultimate · OBS · Crew Chief · TinyPedal · Fanatec ClubSport Formula V2.5 · Elgato Stream Deck · iCUE · Mosquitto MQTT · ProtonVPN · Proton Drive · Discord · 1Password · Git
