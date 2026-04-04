@@ -1,0 +1,13 @@
+# Machine-specific backup and log files -- do not commit
+**/backups/
+**/logs/
+
+# PowerShell transcript logs
+*.log
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini

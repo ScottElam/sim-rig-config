@@ -3,16 +3,16 @@
 .SYNOPSIS
     Applies power plan selection and system performance tweaks for sim-racing and streaming.
 .DESCRIPTION
-    Manages power plan (High Performance or Balanced), visual effects, GameDVR, HAGS,
-    display timeouts, startup delay, and hibernation state.
-    Supports Check, Apply, and Revert. PowerPlan only applies in Apply mode.
+    Logs every run to .\logs\YYYY-MM-DD_HH-mm-ss_Mode.log
+    Backups written to .\backups\backup-YYYY-MM-DD.json (Apply overwrites same-day backup)
+    Revert uses the most recent backup in .\backups\
 .PARAMETER Mode
-    Check  — Report current state vs target. No changes made.
-    Apply  — Apply all tweaks and save backup.json.
-    Revert — Restore previous state from backup.json.
+    Check  - Report current state vs target. No changes made.
+    Apply  - Apply all tweaks and save dated backup.
+    Revert - Restore previous state from most recent backup.
 .PARAMETER PowerPlan
-    Performance — Sets High Performance power plan (default; recommended for 9850X3D).
-    Eco         — Sets Balanced power plan.
+    Performance - Sets High Performance power plan (default; recommended for 9850X3D).
+    Eco         - Sets Balanced power plan.
 .EXAMPLE
     .\Invoke-Performance.ps1 -Mode Check
     .\Invoke-Performance.ps1 -Mode Apply -PowerPlan Performance
@@ -32,142 +32,116 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
 
-$BackupFile = Join-Path $PSScriptRoot 'backup.json'
+# ---------------------------------------------------------------------------
+# Logging and backup paths
+# ---------------------------------------------------------------------------
 
-# ── Known power plan GUIDs ──────────────────────────────────────────────────
+$LogDir    = Join-Path $PSScriptRoot 'logs'
+$BackupDir = Join-Path $PSScriptRoot 'backups'
+
+$LogFile    = Join-Path $LogDir    "$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss')_$Mode.log"
+$BackupFile = Join-Path $BackupDir "backup-$(Get-Date -Format 'yyyy-MM-dd').json"
+
+if (-not (Test-Path $LogDir))    { New-Item -ItemType Directory -Path $LogDir    | Out-Null }
+if (-not (Test-Path $BackupDir)) { New-Item -ItemType Directory -Path $BackupDir | Out-Null }
+
+# ---------------------------------------------------------------------------
+# Known power plan GUIDs
+# ---------------------------------------------------------------------------
 
 $PlanGuids = @{
     Balanced        = '381b4222-f694-41f0-9685-ff5bb260df2e'
     HighPerformance = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
 }
 
-$DesiredPlanGuid = if ($PowerPlan -eq 'Performance') { $PlanGuids.HighPerformance } else { $PlanGuids.Balanced }
+$DesiredPlanGuid       = if ($PowerPlan -eq 'Performance') { $PlanGuids.HighPerformance } else { $PlanGuids.Balanced }
 $DesiredMonitorTimeout = if ($PowerPlan -eq 'Performance') { 0 } else { 15 }
 
-# ── Colour helpers ──────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Logging helpers
+# ---------------------------------------------------------------------------
 
-function Write-Ok   { param($msg) Write-Host "  [OK]      $msg" -ForegroundColor Green }
-function Write-Warn { param($msg) Write-Host "  [CHANGE]  $msg" -ForegroundColor Yellow }
-function Write-Info { param($msg) Write-Host "  [INFO]    $msg" -ForegroundColor Cyan }
-function Write-Err  { param($msg) Write-Host "  [ERROR]   $msg" -ForegroundColor Red }
-function Write-Skip { param($msg) Write-Host "  [SKIP]    $msg" -ForegroundColor DarkGray }
+function Write-Log {
+    param([string]$Level, [string]$Message, [System.ConsoleColor]$Color)
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    $consoleLine = "  [$Level]".PadRight(12) + $Message
+    $logLine     = "[$timestamp] [$Level]".PadRight(32) + $Message
+    Write-Host $consoleLine -ForegroundColor $Color
+    Add-Content -Path $LogFile -Value $logLine -Encoding UTF8
+}
 
-# ── Registry tweaks ─────────────────────────────────────────────────────────
+function Write-Ok   { param([string]$msg) Write-Log -Level 'OK'     -Message $msg -Color Green }
+function Write-Warn { param([string]$msg) Write-Log -Level 'CHANGE' -Message $msg -Color Yellow }
+function Write-Info { param([string]$msg) Write-Log -Level 'INFO'   -Message $msg -Color Cyan }
+function Write-Err  { param([string]$msg) Write-Log -Level 'ERROR'  -Message $msg -Color Red }
+function Write-Skip { param([string]$msg) Write-Log -Level 'SKIP'   -Message $msg -Color DarkGray }
+
+function Write-Section {
+    param([string]$Title)
+    $line = "`n-- $Title --"
+    Write-Host $line -ForegroundColor White
+    Add-Content -Path $LogFile -Value $line -Encoding UTF8
+}
+
+function Write-Header {
+    param([string]$Title)
+    $header = @(
+        '',
+        '=== {0} ===' -f $Title,
+        'Script  : {0}' -f $PSCommandPath,
+        'User    : {0}\{1}' -f $env:USERDOMAIN, $env:USERNAME,
+        'Machine : {0}' -f $env:COMPUTERNAME,
+        'Started : {0}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'),
+        ''
+    )
+    foreach ($line in $header) {
+        Write-Host $line -ForegroundColor White
+        Add-Content -Path $LogFile -Value $line -Encoding UTF8
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Registry tweaks
+# ---------------------------------------------------------------------------
 
 $RegistryTweaks = @(
-
-    # Visual Effects — best performance
-    @{
-        Path  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'
-        Name  = 'VisualFXSetting'
-        Value = 2
-        Type  = 'DWord'
-        Label = 'Visual effects — Adjust for best performance'
-    }
-    @{
-        Path  = 'HKCU:\Control Panel\Desktop'
-        Name  = 'AnimateWindows'
-        Value = 0
-        Type  = 'DWord'
-        Label = 'Animate windows — disabled'
-    }
-    @{
-        Path  = 'HKCU:\Control Panel\Desktop'
-        Name  = 'MenuShowDelay'
-        Value = 0
-        Type  = 'String'
-        Label = 'Menu show delay — 0ms'
-    }
-    @{
-        Path  = 'HKCU:\Control Panel\Desktop\WindowMetrics'
-        Name  = 'MinAnimate'
-        Value = '0'
-        Type  = 'String'
-        Label = 'Minimise/maximise animations — disabled'
-    }
-    @{
-        Path  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
-        Name  = 'TaskbarAnimations'
-        Value = 0
-        Type  = 'DWord'
-        Label = 'Taskbar animations — disabled'
-    }
-    @{
-        Path  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
-        Name  = 'ListviewAlphaSelect'
-        Value = 0
-        Type  = 'DWord'
-        Label = 'Listview alpha selection — disabled'
-    }
-    @{
-        Path  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
-        Name  = 'ListviewShadow'
-        Value = 0
-        Type  = 'DWord'
-        Label = 'Icon shadows on desktop — disabled'
-    }
-
+    # Visual effects
+    @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'; Name = 'VisualFXSetting';   Value = 2;   Type = 'DWord';  Label = 'Visual effects -- Adjust for best performance' },
+    @{ Path = 'HKCU:\Control Panel\Desktop';                                            Name = 'AnimateWindows';    Value = 0;   Type = 'DWord';  Label = 'Animate windows -- disabled' },
+    @{ Path = 'HKCU:\Control Panel\Desktop';                                            Name = 'MenuShowDelay';     Value = '0'; Type = 'String'; Label = 'Menu show delay -- 0ms' },
+    @{ Path = 'HKCU:\Control Panel\Desktop\WindowMetrics';                              Name = 'MinAnimate';        Value = '0'; Type = 'String'; Label = 'Minimise/maximise animations -- disabled' },
+    @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced';     Name = 'TaskbarAnimations'; Value = 0;   Type = 'DWord';  Label = 'Taskbar animations -- disabled' },
+    @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced';     Name = 'ListviewAlphaSelect'; Value = 0; Type = 'DWord';  Label = 'Listview alpha selection -- disabled' },
+    @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced';     Name = 'ListviewShadow';    Value = 0;   Type = 'DWord';  Label = 'Icon shadows on desktop -- disabled' },
     # GameDVR
-    @{
-        Path  = 'HKCU:\System\GameConfigStore'
-        Name  = 'GameDVR_Enabled'
-        Value = 0
-        Type  = 'DWord'
-        Label = 'GameDVR — disabled'
-    }
-    @{
-        Path  = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR'
-        Name  = 'AllowGameDVR'
-        Value = 0
-        Type  = 'DWord'
-        Label = 'GameDVR policy — disabled'
-    }
-
-    # Hardware-Accelerated GPU Scheduling
-    @{
-        Path  = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
-        Name  = 'HwSchMode'
-        Value = 2
-        Type  = 'DWord'
-        Label = 'Hardware-Accelerated GPU Scheduling (HAGS) — enabled'
-    }
-
+    @{ Path = 'HKCU:\System\GameConfigStore';                                           Name = 'GameDVR_Enabled';   Value = 0;   Type = 'DWord';  Label = 'GameDVR -- disabled' },
+    @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR';                     Name = 'AllowGameDVR';      Value = 0;   Type = 'DWord';  Label = 'GameDVR policy -- disabled' },
+    # HAGS
+    @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers';                Name = 'HwSchMode';         Value = 2;   Type = 'DWord';  Label = 'Hardware-Accelerated GPU Scheduling (HAGS) -- enabled' },
     # Startup delay
-    @{
-        Path  = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Serialize'
-        Name  = 'StartupDelayInMSec'
-        Value = 0
-        Type  = 'DWord'
-        Label = 'Startup delay — 0ms'
-    }
-
-    # Processor scheduling — Programs (foreground)
-    @{
-        Path  = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'
-        Name  = 'Win32PrioritySeparation'
-        Value = 38   # 0x26 — short variable intervals, prioritise foreground
-        Type  = 'DWord'
-        Label = 'Processor scheduling — optimised for foreground programs'
-    }
+    @{ Path = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Serialize';    Name = 'StartupDelayInMSec'; Value = 0;  Type = 'DWord';  Label = 'Startup delay -- 0ms' },
+    # Processor scheduling
+    @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl';                Name = 'Win32PrioritySeparation'; Value = 38; Type = 'DWord'; Label = 'Processor scheduling -- optimised for foreground programs' }
 )
 
-# ── Helper: read registry value ─────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
 
 function Get-RegValue {
     param([string]$Path, [string]$Name)
     try {
         return (Get-ItemProperty -Path $Path -Name $Name -ErrorAction Stop).$Name
-    } catch {
+    }
+    catch {
         return $null
     }
 }
 
-function Ensure-RegPath {
+function Set-RegPath {
     param([string]$Path)
     if (-not (Test-Path $Path)) { New-Item -Path $Path -Force | Out-Null }
 }
-
-# ── Helper: get active power plan ──────────────────────────────────────────
 
 function Get-ActivePlanGuid {
     $output = & powercfg /getactivescheme 2>$null
@@ -186,162 +160,158 @@ function Get-PlanName {
     }
 }
 
-# ── Helper: hibernation state ───────────────────────────────────────────────
-
 function Get-HibernationState {
-    $hiberFile = "$env:SystemDrive\hiberfil.sys"
-    return (Test-Path $hiberFile)
+    return (Test-Path "$env:SystemDrive\hiberfil.sys")
 }
 
-# ── Helper: monitor timeout (AC) ────────────────────────────────────────────
-
-function Get-MonitorTimeout {
-    $output = & powercfg /query $DesiredPlanGuid 7516b95f-f776-4464-8c53-06167f40cc99 3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e 2>$null
-    if ($output -match 'Current AC Power Setting Index:\s+0x([0-9a-f]+)') {
-        return [Convert]::ToInt32($Matches[1], 16) / 60  # convert seconds to minutes
-    }
-    return $null
+function Get-LatestBackup {
+    $latest = Get-ChildItem -Path $BackupDir -Filter 'backup-*.json' -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending |
+        Select-Object -First 1
+    return $latest
 }
 
-# ── CHECK ───────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# CHECK
+# ---------------------------------------------------------------------------
 
 function Invoke-Check {
-    Write-Host "`n=== Performance — Check (target plan: $PowerPlan) ===" -ForegroundColor White
+    Write-Header -Title "Performance -- Check (target plan: $PowerPlan)"
     $driftFound = $false
 
-    # Power plan
-    Write-Host "`n-- Power Plan --" -ForegroundColor White
-    $activePlan = Get-ActivePlanGuid
-    $activeName = Get-PlanName -Guid $activePlan
+    Write-Section 'Power Plan'
+    $activePlan  = Get-ActivePlanGuid
+    $activeName  = Get-PlanName -Guid $activePlan
     $desiredName = Get-PlanName -Guid $DesiredPlanGuid
     if ($activePlan -eq $DesiredPlanGuid) {
         Write-Ok "Active plan: $activeName"
-    } else {
-        Write-Warn "Active plan: $activeName — desired: $desiredName"
+    }
+    else {
+        Write-Warn "Active plan: $activeName -- desired: $desiredName"
         $driftFound = $true
     }
 
-    # Hibernation
-    Write-Host "`n-- Hibernation --" -ForegroundColor White
+    Write-Section 'Hibernation'
     $hibEnabled = Get-HibernationState
     if ($PowerPlan -eq 'Performance') {
         if (-not $hibEnabled) {
             Write-Ok "Hibernation is disabled"
-        } else {
-            Write-Warn "Hibernation is enabled — should be disabled in Performance mode"
+        }
+        else {
+            Write-Warn "Hibernation is enabled -- should be disabled in Performance mode"
             $driftFound = $true
         }
-    } else {
-        Write-Info "Eco mode — hibernation state left as-is (currently: $(if ($hibEnabled) {'enabled'} else {'disabled'}))"
+    }
+    else {
+        Write-Info "Eco mode -- hibernation state not checked (currently: $(if ($hibEnabled) {'enabled'} else {'disabled'}))"
     }
 
-    # Registry tweaks
-    Write-Host "`n-- Registry Tweaks --" -ForegroundColor White
+    Write-Section 'Registry Tweaks'
     foreach ($tweak in $RegistryTweaks) {
         $current = Get-RegValue -Path $tweak.Path -Name $tweak.Name
-        # Compare as string to handle mixed types
         if ($null -ne $current -and "$current" -eq "$($tweak.Value)") {
             Write-Ok "$($tweak.Label)"
-        } else {
+        }
+        else {
             $display = if ($null -eq $current) { '(not set)' } else { $current }
-            Write-Warn "$($tweak.Label) — current: $display, desired: $($tweak.Value)"
+            Write-Warn "$($tweak.Label) -- current: $display, desired: $($tweak.Value)"
             $driftFound = $true
         }
     }
 
-    # HAGS note
-    Write-Host "`n-- HAGS Note --" -ForegroundColor White
-    Write-Info "HAGS registry change takes effect after a reboot and requires a supported driver."
-    Write-Info "Verify in: NVIDIA App → Settings → Gaming → Hardware-Accelerated GPU Scheduling"
+    Write-Info "HAGS change requires a reboot and supported driver to take effect"
+    Write-Info "Log saved to $LogFile"
 
     if ($driftFound) {
+        Add-Content -Path $LogFile -Value "`nRESULT: DRIFT DETECTED" -Encoding UTF8
         Write-Host "`nDrift detected. Run with -Mode Apply to remediate.`n" -ForegroundColor Yellow
         exit 1
-    } else {
+    }
+    else {
+        Add-Content -Path $LogFile -Value "`nRESULT: PASS" -Encoding UTF8
         Write-Host "`nAll performance settings are in target state.`n" -ForegroundColor Green
         exit 0
     }
 }
 
-# ── APPLY ───────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# APPLY
+# ---------------------------------------------------------------------------
 
 function Invoke-Apply {
-    Write-Host "`n=== Performance — Apply (plan: $PowerPlan) ===" -ForegroundColor White
+    Write-Header -Title "Performance -- Apply (plan: $PowerPlan)"
 
-    $backupEntries = @()
+    $backupEntries  = [System.Collections.Generic.List[object]]::new()
     $activePlanBefore = Get-ActivePlanGuid
-    $hibBefore = Get-HibernationState
+    $hibBefore        = Get-HibernationState
 
-    # Power plan
-    Write-Host "`n-- Power Plan --" -ForegroundColor White
+    Write-Section 'Power Plan'
     $currentPlanName = Get-PlanName -Guid $activePlanBefore
-    $desiredName = Get-PlanName -Guid $DesiredPlanGuid
+    $desiredName     = Get-PlanName -Guid $DesiredPlanGuid
 
-    # Ensure High Performance plan exists (it can be hidden on some editions)
     if ($PowerPlan -eq 'Performance') {
         $existingPlans = & powercfg /list 2>$null
         if ($existingPlans -notmatch $PlanGuids.HighPerformance) {
-            Write-Info "High Performance plan not visible — making it available..."
+            Write-Info "High Performance plan not visible -- making it available..."
             & powercfg /duplicatescheme $PlanGuids.HighPerformance | Out-Null
         }
     }
 
     if ($activePlanBefore -eq $DesiredPlanGuid) {
         Write-Skip "Power plan is already $desiredName"
-    } else {
+    }
+    else {
         & powercfg /setactive $DesiredPlanGuid 2>$null
         Write-Ok "Power plan set to $desiredName (was $currentPlanName)"
     }
 
-    # Monitor timeout
-    Write-Host "`n-- Monitor Timeout --" -ForegroundColor White
-    $timeoutSeconds = $DesiredMonitorTimeout * 60
+    Write-Section 'Monitor Timeout'
     & powercfg /change monitor-timeout-ac $DesiredMonitorTimeout 2>$null
     $timeoutLabel = if ($DesiredMonitorTimeout -eq 0) { 'never' } else { "$($DesiredMonitorTimeout) minutes" }
     Write-Ok "AC monitor timeout set to $timeoutLabel"
 
-    # Hibernation
-    Write-Host "`n-- Hibernation --" -ForegroundColor White
+    Write-Section 'Hibernation'
     if ($PowerPlan -eq 'Performance') {
         if ($hibBefore) {
             & powercfg /h off 2>$null
             Write-Ok "Hibernation disabled (freed ~16 GB hiberfil.sys)"
-        } else {
+        }
+        else {
             Write-Skip "Hibernation already disabled"
         }
-    } else {
-        Write-Skip "Eco mode — hibernation state not modified"
+    }
+    else {
+        Write-Skip "Eco mode -- hibernation state not modified"
     }
 
-    # Registry tweaks
-    Write-Host "`n-- Registry Tweaks --" -ForegroundColor White
+    Write-Section 'Registry Tweaks'
     foreach ($tweak in $RegistryTweaks) {
         $current = Get-RegValue -Path $tweak.Path -Name $tweak.Name
 
-        $backupEntries += [PSCustomObject]@{
-            Path            = $tweak.Path
-            Name            = $tweak.Name
-            OriginalValue   = $current
-            OriginalType    = $tweak.Type
-        }
+        $backupEntries.Add([PSCustomObject]@{
+            Path          = $tweak.Path
+            Name          = $tweak.Name
+            OriginalValue = $current
+            OriginalType  = $tweak.Type
+        })
 
         if ($null -ne $current -and "$current" -eq "$($tweak.Value)") {
-            Write-Skip "$($tweak.Label) — already set"
+            Write-Skip "$($tweak.Label) -- already set"
             continue
         }
 
         try {
-            Ensure-RegPath -Path $tweak.Path
+            Set-RegPath -Path $tweak.Path
             Set-ItemProperty -Path $tweak.Path -Name $tweak.Name -Value $tweak.Value -Type $tweak.Type -Force -ErrorAction Stop
             $prev = if ($null -eq $current) { '(not set)' } else { $current }
-            Write-Ok "$($tweak.Label) — applied (was $prev)"
-        } catch {
-            Write-Err "Failed: $($tweak.Label) — $_"
+            Write-Ok "$($tweak.Label) -- applied (was $prev)"
+        }
+        catch {
+            Write-Err "Failed: $($tweak.Label) -- $_"
         }
     }
 
-    # Save backup
-    $backup = @{
+    $backup = [PSCustomObject]@{
         Timestamp         = (Get-Date -Format 'o')
         PowerPlanApplied  = $PowerPlan
         PreviousPlanGuid  = $activePlanBefore
@@ -350,60 +320,70 @@ function Invoke-Apply {
     }
     $backup | ConvertTo-Json -Depth 5 | Set-Content -Path $BackupFile -Encoding UTF8
 
-    Write-Host "`nBackup saved to $BackupFile" -ForegroundColor Cyan
-    Write-Host "Apply complete. HAGS change and visual effects require a reboot to fully take effect.`n" -ForegroundColor Green
+    Write-Info "Backup saved to $BackupFile"
+    Write-Info "Log saved to $LogFile"
+    Add-Content -Path $LogFile -Value "`nRESULT: APPLIED" -Encoding UTF8
+    Write-Host "`nApply complete. HAGS and visual effect changes require a reboot.`n" -ForegroundColor Green
 }
 
-# ── REVERT ──────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# REVERT
+# ---------------------------------------------------------------------------
 
 function Invoke-Revert {
-    Write-Host "`n=== Performance — Revert ===" -ForegroundColor White
+    Write-Header -Title 'Performance -- Revert'
 
-    if (-not (Test-Path $BackupFile)) {
-        Write-Err "No backup found at $BackupFile. Run -Mode Apply first."
+    $latestBackup = Get-LatestBackup
+    if (-not $latestBackup) {
+        Write-Err "No backup files found in $BackupDir. Run -Mode Apply first."
+        Add-Content -Path $LogFile -Value "`nRESULT: FAILED -- no backup found" -Encoding UTF8
         exit 1
     }
 
-    $backup = Get-Content $BackupFile -Raw | ConvertFrom-Json
-    Write-Info "Restoring from backup taken at $($backup.Timestamp)"
+    Write-Info "Using backup: $($latestBackup.Name)"
+    $backup = Get-Content $latestBackup.FullName -Raw | ConvertFrom-Json
 
-    # Restore power plan
-    Write-Host "`n-- Power Plan --" -ForegroundColor White
+    Write-Section 'Power Plan'
     if ($backup.PreviousPlanGuid) {
         & powercfg /setactive $backup.PreviousPlanGuid 2>$null
         Write-Ok "Power plan restored to $(Get-PlanName -Guid $backup.PreviousPlanGuid)"
     }
 
-    # Hibernation — note only, not auto-restored
-    Write-Host "`n-- Hibernation --" -ForegroundColor White
+    Write-Section 'Hibernation'
     if ($backup.HibernationBefore -eq $true) {
         Write-Info "Hibernation was enabled before Apply. Re-enable manually if desired:"
-        Write-Host "         powercfg /h on" -ForegroundColor DarkGray
-    } else {
-        Write-Skip "Hibernation was already disabled before Apply — no change needed"
+        Write-Info "    powercfg /h on"
+    }
+    else {
+        Write-Skip "Hibernation was already disabled before Apply -- no change needed"
     }
 
-    # Registry tweaks
-    Write-Host "`n-- Registry Tweaks --" -ForegroundColor White
+    Write-Section 'Registry Tweaks'
     foreach ($entry in $backup.Tweaks) {
         try {
             if ($null -eq $entry.OriginalValue) {
                 Remove-ItemProperty -Path $entry.Path -Name $entry.Name -ErrorAction SilentlyContinue
                 Write-Ok "Removed $($entry.Name) from $($entry.Path)"
-            } else {
-                Ensure-RegPath -Path $entry.Path
+            }
+            else {
+                Set-RegPath -Path $entry.Path
                 Set-ItemProperty -Path $entry.Path -Name $entry.Name -Value $entry.OriginalValue -Type $entry.OriginalType -Force -ErrorAction Stop
                 Write-Ok "Restored $($entry.Name) to $($entry.OriginalValue)"
             }
-        } catch {
+        }
+        catch {
             Write-Err "Failed to revert $($entry.Path)\$($entry.Name): $_"
         }
     }
 
+    Write-Info "Log saved to $LogFile"
+    Add-Content -Path $LogFile -Value "`nRESULT: REVERTED" -Encoding UTF8
     Write-Host "`nRevert complete. A reboot may be needed for visual effect and HAGS changes.`n" -ForegroundColor Green
 }
 
-# ── Entry point ─────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 switch ($Mode) {
     'Check'  { Invoke-Check }

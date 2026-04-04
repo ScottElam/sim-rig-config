@@ -39,8 +39,8 @@ Run scripts in this order. Each step builds on the last.
 | 1 | `1-SystemComponents` | `Invoke-SystemComponents.ps1` | Remove unused Windows features and AppX packages |
 | 2 | `2-InstalledPrograms` | `Invoke-InstalledPrograms.ps1` | Disable NVIDIA telemetry; report software recommendations |
 | 3 | `3-Services` | `Invoke-Services.ps1` | Disable and throttle unnecessary Windows services |
-| 4 | `4-PrivacySecurity` | `Invoke-PrivacySecurity.ps1` | Registry-based privacy and security hardening |
-| 5 | `5-Performance` | `Invoke-Performance.ps1` | Power plan and system performance tweaks |
+| 4 | **Check:** `4-PrivacySecurity` | `Invoke-PrivacySecurity.ps1` | Registry-based privacy and security hardening |
+| 5 | **Check:** `5-Performance` | `Invoke-Performance.ps1` | Power plan and system performance tweaks |
 
 ---
 

@@ -1,3 +1,10 @@
 4/3/2026 Claude Prompts
 Chat: Gaming PC optimization for Le Mans Ultimate and streaming
 Ok, coming back to this. I want to split this up into 1 - System Component check/disable, 2 - Installed Programs check/disable, 3 - Services check/disable, 4 - Privacy/Security tweaks, and 5 - Performance tweaks in that order. Here are some parameters: This is for the Windows Operating System initially (not added software yet); I would like you to generate powershell scripts for these tasks; I would like Readme.md text to explain what we are doing; Obviously this is all going into github; I would like the scripts to have the option to check the configuration against our standard without making changes, and an option to make the changes and report what was done; I would like the system component, privacy/security, performance, and services scripts have the option to reverse the changes it makes; I would like the performance scripts to have the option to go from an eco power plan to a performance power plan. Notes: I am now running triple 2k monitors at 180hz; I will not be printing from this system; I will be using GIT on the system; Fanatec uses MQTT; I do run also Discord and 1Password. Thanks!
+--
+continued...
+--
+I get the following error running the first script:
+--
+great, thanks! could you also add logging each run's status or actions to a file? use a year, month, day style naming for the logs and the backup files.
+--
