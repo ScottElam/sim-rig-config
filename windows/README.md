@@ -14,9 +14,19 @@ Windows 11 optimisation and hardening scripts for a high-performance sim-racing 
 | Displays | Triple 2K @ 180 Hz |
 
 ## Free Alternatives
+
+| Site | Description |
+|---|---|
 | https://christitus.com/downloads/ | $10 - Chris Titus, performance, privacy, security, anti-bloat, custom iso, SW update, etc. |
-| https://www.hellzerg.com/ | Gaming focus, with privacy |
+| https://www.hellzerg.com/ | Suspicious: Gaming focus, with privacy |
 | https://www.oo-software.com/en/shutup10/features | Privacy and Security focus |
+| https://www.windowscentral.com/microsoft/windows-11/how-to-fine-tune-your-pc-with-the-sophia-script-for-windows-11 | |
+| https://github.com/farag2/Sophia-Script-for-Windows | RU/UA: The most powerful PowerShell module for fine-tuning Windows on GitHub |
+| https://winaero.com/the-list-of-winaero-tweaker-features/ | Recommended by Kevin |
+| https://atlasos.net/ | |
+| https://github.com/raphire/win11debloat | |
+
+
 
 ## Software Stack
 
