@@ -1,3 +1,4 @@
+# Invoke-PrivacySecurity.ps1
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS

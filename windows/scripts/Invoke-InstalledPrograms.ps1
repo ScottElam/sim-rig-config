@@ -1,3 +1,4 @@
+# Invoke-InstalledPrograms.ps1
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
