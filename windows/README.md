@@ -106,6 +106,76 @@ Scripts 1, 3, 4, and 5 write a `backup.json` to their own folder when run with `
 
 ---
 
+## Utilities
+
+Runtime tools kept in the `Utilities` folder. These are not part of the hardening pipeline and can be run at any time independently. All require **Administrator**.
+
+| Script | Purpose |
+|---|---|
+| `Launch-LeMansUltimate.ps1` | Launch Le Mans Ultimate via Steam with a custom process priority and CPU affinity mask |
+| `Get-ProcessAffinityReport.ps1` | Snapshot every running process and report its priority class and CPU affinity |
+
+### `Launch-LeMansUltimate.ps1`
+
+Fires the Steam `applaunch` command for Le Mans Ultimate, waits up to 90 seconds for the game process to appear, then applies the configured priority and affinity. If the game is already running the settings are applied to the existing process immediately.
+
+Key variables at the top of the script:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `$SteamExe` | `C:\Program Files (x86)\Steam\steam.exe` | Update if Steam is installed to a non-default path |
+| `$SteamAppId` | `1537430` | Le Mans Ultimate Steam App ID |
+| `$ProcessName` | `LeMansUltimate` | Game executable name without `.exe` |
+| `$TargetPriority` | `High` | `Idle \| BelowNormal \| Normal \| AboveNormal \| High \| RealTime` — avoid `RealTime` |
+| `$AffinityMask` | `0xFFFE` | Bitmask of allowed cores. `$null` = OS default (all cores) |
+| `$WaitTimeoutSec` | `90` | Seconds to wait for the process before giving up |
+
+**Affinity mask quick reference** (adjust upper bound to your logical core count):
+
+| Mask | Cores assigned |
+|---|---|
+| `0xFFFE` | Cores 1–15 — skips Core 0, leaving it free for Windows/background (recommended for 9850X3D) |
+| `0xFFFF` | Cores 0–15 (all 16 cores) |
+| `0x00FF` | Cores 0–7 (P-cores only on a hybrid layout) |
+| `$null` | OS default — no affinity change applied |
+
+```powershell
+.\Utilities\Launch-LeMansUltimate.ps1
+```
+
+### `Get-ProcessAffinityReport.ps1`
+
+Queries every running process and prints a colour-coded table of priority class and CPU affinity, followed by a summary count and a priority legend. Useful for verifying that the launcher applied its settings correctly, or for auditing any other process on the system.
+
+Key variables at the top of the script:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `$FilterName` | `""` | Partial name filter — e.g. `"LeMans"` to show only matching processes. Empty = all |
+| `$HideNormal` | `$false` | Set to `$true` to suppress processes running at Normal priority on all cores |
+| `$SortBy` | `Name` | `Name \| PID \| Priority \| Affinity` |
+
+```powershell
+# Full system report
+.\Utilities\Get-ProcessAffinityReport.ps1
+
+# Verify Le Mans Ultimate specifically
+# (edit $FilterName = "LeMans" in the script, or run as-is and scan the output)
+.\Utilities\Get-ProcessAffinityReport.ps1
+```
+
+Output columns:
+
+| Column | Description |
+|---|---|
+| Process Name | Executable name |
+| PID | Process ID |
+| Priority | Windows priority class (colour-coded: Red = RealTime, Yellow = High, Cyan = AboveNormal, Grey = Normal/lower) |
+| Affinity | Hex bitmask of allowed logical cores |
+| Cores Assigned | Human-readable core list or `ALL (n)` if using every core |
+
+---
+
 ## Important Notes
 
 - **Mosquitto MQTT** is kept at Automatic start. Fanatec uses MQTT for wheel telemetry; it also serves the home automation stack.
