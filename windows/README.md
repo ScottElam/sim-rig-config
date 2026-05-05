@@ -1,8 +1,8 @@
-# win11-gaming-hardening
+# sim-rig-config/windows
 
-Windows 11 optimisation and hardening scripts for a high-performance sim-racing and streaming PC.
+Windows 11 optimization and hardening scripts for a high-performance sim-racing and streaming PC.
 
-## Build Target
+## System Overview
 
 | Component | Spec |
 |---|---|

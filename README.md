@@ -4,17 +4,32 @@ Configuration backups, scripts, and notes for my sim racing PC build and streami
 
 ## System Overview
 
-| Component | Details |
+| Component | Spec |
 |---|---|
-| CPU | AMD Ryzen 9 9850X3D |
-| GPU | NVIDIA RTX 5070 |
-| Motherboard | MSI MAG X870E Tomahawk MAX WiFi |
-| RAM | 32GB DDR5 |
+| CPU | AMD Ryzen 7 9850X3D 4.7ghz 8-core |
+| GPU | Zotac Gaming Twin Edge OC RTX 5070 |
+| Motherboard | MSI MAG X870E Tomahawk MAX WiFi PZ |
+| Memory | Corsair Vengance 32 GB DDR5-6000 CL36 (2x16) |
+| Drives | Samsung 990 EVO Plus 2tb w/MB heatsink |
+| | Samsung 0100 Pro 2tb w/heatsink |
+| Power | Corsair HX1000i |
 | Case | Corsair Air 5400 |
-| Cooling | Corsair Titan AIO (push/pull) |
-| PSU | Corsair HX1000i |
-| Wheel | Fanatec ClubSport Formula V2.5 |
-| Sim | Le Mans Ultimate (LMU) |
+| Cooling | Corsair Titan AIO Liquid CPU Cooler |
+| | 9 x Corsair LX-120 Fans |
+| | Corsair iCue Software |
+| Displays | MSI MAG 32CQ6F |
+| | Triple 2K 1440p @ 180 Hz, 0.5ms, Curved 1500R |
+
+## Sim Rig
+
+| Component | Spec |
+|---|---|
+| Chassis | Advanced Sim Racing ASR 3 - Aluminum profile 3"/1.5" |
+| Monitor Stand | Sim Lab Freestanding Vario™ Triple monitor mount |
+| Wheel Base | GT DD Extreme / Clubsport DD+ |
+| Wheel | GT DD Extreme |
+| Wheel | Clubsport Formula v2.5 with Podium Advanced Paddle Module |
+| Pedals | Clubsport Pedals V3 with throttle damper kit and brake performance kit |
 
 ## Repo Structure
 
