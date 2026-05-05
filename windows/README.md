@@ -6,12 +6,19 @@ Windows 11 optimisation and hardening scripts for a high-performance sim-racing 
 
 | Component | Spec |
 |---|---|
-| CPU | AMD Ryzen 9850X3D |
-| GPU | NVIDIA RTX 5070 |
-| Motherboard | MSI MAG X870E Tomahawk MAX WiFi |
-| Memory | 32 GB DDR5 |
+| CPU | AMD Ryzen 7 9850X3D 4.7ghz 8-core |
+| GPU | Zotac Gaming Twin Edge OC RTX 5070 |
+| Motherboard | MSI MAG X870E Tomahawk MAX WiFi PZ |
+| Memory | Corsair Vengance 32 GB DDR5-6000 CL36 (2x16) |
+| Drives | Samsung 990 EVO Plus 2tb w/MB heatsink |
+| | Samsung 0100 Pro 2tb w/heatsink |
+| Power | Corsair HX1000i |
 | Case | Corsair Air 5400 |
-| Displays | Triple 2K @ 180 Hz |
+| Cooling | Corsair Titan AIO Liquid CPU Cooler |
+| | 9 x Corsair LX-120 Fans |
+| | Corsair iCue Software |
+| Displays | MSI MAG 32CQ6F |
+| | Triple 2K 1440p @ 180 Hz, 0.5ms, Curved 1500R |
 
 ## Free Alternatives
 
@@ -30,7 +37,7 @@ Windows 11 optimisation and hardening scripts for a high-performance sim-racing 
 
 ## Software Stack
 
-Le Mans Ultimate · OBS · Crew Chief · TinyPedal · Fanatec ClubSport Formula V2.5 · Elgato Stream Deck · iCUE · Mosquitto MQTT · ProtonVPN · Proton Drive · Discord · 1Password · Git
+Le Mans Ultimate · OBS · Crew Chief · TinyPedal · Elgato Stream Deck · Fanatec · iCUE · Mosquitto MQTT · NVidia · 
 
 ---
 
