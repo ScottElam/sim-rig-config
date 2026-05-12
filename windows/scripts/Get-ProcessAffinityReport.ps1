@@ -16,7 +16,7 @@ $FilterName = ""
 
 # Only show processes that differ from the "Normal" priority default
 # Set to $true to hide all "Normal / all-cores" baseline entries
-$HideNormal = $false
+$HideNormal = $true
 
 # Sort column: Name | PID | Priority | Affinity
 $SortBy = "Name"
@@ -38,7 +38,7 @@ function ConvertTo-CoreList {
     for ($i = 0; $i -lt $TotalCores; $i++) {
         if ($Mask -band ([long](1 -shl $i))) { $cores += $i }
     }
-    # Compress consecutive ranges for readability  e.g. 0,1,2,3 -> 0-3
+    # Compress consecutive ranges  e.g. 0,1,2,3 -> 0-3
     $ranges = @()
     $start  = $cores[0]; $prev = $cores[0]
     for ($j = 1; $j -lt $cores.Count; $j++) {
@@ -56,13 +56,13 @@ function ConvertTo-CoreList {
 function Get-PriorityColor {
     param([string]$Priority)
     switch ($Priority) {
-        "RealTime"    { return "Red"     }
-        "High"        { return "Yellow"  }
-        "AboveNormal" { return "Cyan"    }
-        "Normal"      { return "Gray"    }
-        "BelowNormal" { return "DarkGray"}
-        "Idle"        { return "DarkGray"}
-        default       { return "White"   }
+        "RealTime"    { return "Red"      }
+        "High"        { return "Yellow"   }
+        "AboveNormal" { return "Cyan"     }
+        "Normal"      { return "Gray"     }
+        "BelowNormal" { return "DarkGray" }
+        "Idle"        { return "DarkGray" }
+        default       { return "White"    }
     }
 }
 
@@ -73,23 +73,24 @@ function Get-PriorityColor {
 Clear-Host
 Write-Host ""
 Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "   Process Priority & CPU Affinity Report" -ForegroundColor Cyan
+Write-Host "   Process Priority & CPU Affinity Report"   -ForegroundColor Cyan
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host ""
 
 if (-not (Test-Admin)) {
-    Write-Host "[WARN] Not running as Administrator — some processes will be inaccessible." -ForegroundColor Yellow
+    Write-Host "[WARN] Not running as Administrator - some processes will be inaccessible." -ForegroundColor Yellow
     Write-Host "       Re-run with 'Run as Administrator' for a complete report." -ForegroundColor Yellow
     Write-Host ""
 }
 
-$logicalCores  = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
-$allCoresMask  = [long]([Math]::Pow(2, $logicalCores) - 1)
+$logicalCores = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+$allCoresMask = [long]([Math]::Pow(2, $logicalCores) - 1)
 
-Write-Host "[INFO] Logical CPU cores : $logicalCores   (all-cores mask: 0x$('{0:X}' -f $allCoresMask))" -ForegroundColor Gray
-Write-Host "[INFO] Snapshot time     : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+Write-Host ("[INFO] Logical CPU cores : {0}   (all-cores mask: 0x{1:X})" -f $logicalCores, $allCoresMask) -ForegroundColor Gray
+Write-Host ("[INFO] Snapshot time     : {0}"   -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"))               -ForegroundColor Gray
+
 if ($FilterName) {
-    Write-Host "[INFO] Filter           : *$FilterName*" -ForegroundColor Gray
+    Write-Host ("[INFO] Filter            : *{0}*" -f $FilterName) -ForegroundColor Gray
 }
 Write-Host ""
 
@@ -98,7 +99,7 @@ $results   = [System.Collections.Generic.List[PSCustomObject]]::new()
 $accessErr = 0
 
 $allProcs = Get-Process -ErrorAction SilentlyContinue |
-            Where-Object { -not $FilterName -or $_.Name -like "*$FilterName*" }
+            Where-Object { (-not $FilterName) -or ($_.Name -like "*$FilterName*") }
 
 foreach ($proc in $allProcs) {
     try {
@@ -109,14 +110,13 @@ foreach ($proc in $allProcs) {
         if ($HideNormal -and $priority -eq "Normal" -and $allCores) { continue }
 
         $results.Add([PSCustomObject]@{
-            Name          = $proc.Name
-            PID           = $proc.Id
-            Priority      = $priority
-            AffinityHex   = "0x$('{0:X}' -f $mask)"
-            AffinityMask  = $mask
-            Cores         = ConvertTo-CoreList $mask $logicalCores
-            AllCores      = $allCores
-            CPU_Pct       = ""   # placeholder — populated below if desired
+            Name         = $proc.Name
+            PID          = $proc.Id
+            Priority     = $priority
+            AffinityHex  = ("0x{0:X}" -f $mask)
+            AffinityMask = $mask
+            Cores        = ConvertTo-CoreList $mask $logicalCores
+            AllCores     = $allCores
         })
     } catch {
         $accessErr++
@@ -141,17 +141,15 @@ $col3 = 13   # Priority
 $col4 = 12   # Hex mask
 $col5 = 22   # Core list
 
-$header = ("{0,-$col1} {1,$col2}  {2,-$col3} {3,-$col4} {4,-$col5}" `
-           -f "Process Name","PID","Priority","Affinity","Cores Assigned")
+$header  = "{0,-$col1} {1,$col2}  {2,-$col3} {3,-$col4} {4,-$col5}" -f "Process Name","PID","Priority","Affinity","Cores Assigned"
 $divider = "-" * ($col1 + $col2 + $col3 + $col4 + $col5 + 8)
 
-Write-Host $header    -ForegroundColor White
-Write-Host $divider   -ForegroundColor DarkGray
+Write-Host $header  -ForegroundColor White
+Write-Host $divider -ForegroundColor DarkGray
 
 foreach ($r in $sorted) {
     $coreDisplay = if ($r.AllCores) { "ALL ($logicalCores)" } else { $r.Cores }
-    $line = ("{0,-$col1} {1,$col2}  {2,-$col3} {3,-$col4} {4,-$col5}" `
-             -f $r.Name, $r.PID, $r.Priority, $r.AffinityHex, $coreDisplay)
+    $line  = "{0,-$col1} {1,$col2}  {2,-$col3} {3,-$col4} {4,-$col5}" -f $r.Name, $r.PID, $r.Priority, $r.AffinityHex, $coreDisplay
     $color = Get-PriorityColor $r.Priority
     Write-Host $line -ForegroundColor $color
 }
@@ -162,35 +160,40 @@ Write-Host ""
 # ---------------------------------------------------------------------------
 # SUMMARY
 # ---------------------------------------------------------------------------
-$totalShown  = $sorted.Count
-$nonDefault  = ($sorted | Where-Object { $_.Priority -ne "Normal" -or -not $_.AllCores }).Count
-$highPlus    = ($sorted | Where-Object { $_.Priority -in @("High","RealTime") }).Count
-$partialAff  = ($sorted | Where-Object { -not $_.AllCores }).Count
+
+$totalShown = $sorted.Count
+$nonDefault = ($sorted | Where-Object { $_.Priority -ne "Normal" -or (-not $_.AllCores) }).Count
+$highPlus   = ($sorted | Where-Object { $_.Priority -in @("High","RealTime") }).Count
+$partialAff = ($sorted | Where-Object { -not $_.AllCores }).Count
 
 Write-Host "SUMMARY" -ForegroundColor Cyan
 Write-Host "-------" -ForegroundColor DarkGray
 Write-Host ("  Processes shown         : {0,6}" -f $totalShown)
-Write-Host ("  Inaccessible (skipped)  : {0,6}" -f $accessErr) -ForegroundColor $(if ($accessErr) {"Yellow"} else {"Gray"})
-Write-Host ("  Non-default settings    : {0,6}" -f $nonDefault) -ForegroundColor $(if ($nonDefault) {"Cyan"} else {"Gray"})
-Write-Host ("  High or RealTime prio   : {0,6}" -f $highPlus)   -ForegroundColor $(if ($highPlus)   {"Yellow"} else {"Gray"})
-Write-Host ("  Custom CPU affinity     : {0,6}" -f $partialAff) -ForegroundColor $(if ($partialAff) {"Cyan"} else {"Gray"})
+Write-Host ("  Inaccessible (skipped)  : {0,6}" -f $accessErr)   -ForegroundColor $(if ($accessErr)  { "Yellow" } else { "Gray" })
+Write-Host ("  Non-default settings    : {0,6}" -f $nonDefault)  -ForegroundColor $(if ($nonDefault) { "Cyan"   } else { "Gray" })
+Write-Host ("  High or RealTime prio   : {0,6}" -f $highPlus)    -ForegroundColor $(if ($highPlus)   { "Yellow" } else { "Gray" })
+Write-Host ("  Custom CPU affinity     : {0,6}" -f $partialAff)  -ForegroundColor $(if ($partialAff) { "Cyan"   } else { "Gray" })
 Write-Host ""
 
 # ---------------------------------------------------------------------------
 # PRIORITY LEGEND
 # ---------------------------------------------------------------------------
+
 Write-Host "PRIORITY LEGEND" -ForegroundColor Cyan
-Write-Host "-------" -ForegroundColor DarkGray
-@(
-    @{ P="RealTime";    C="Red";      D="Highest possible — can starve the OS. Use with extreme care." }
+Write-Host "---------------" -ForegroundColor DarkGray
+
+$legend = @(
+    @{ P="RealTime";    C="Red";      D="Highest possible - can starve the OS. Use with extreme care." }
     @{ P="High";        C="Yellow";   D="Recommended boost for games / latency-sensitive apps." }
     @{ P="AboveNormal"; C="Cyan";     D="Mild boost above standard applications." }
     @{ P="Normal";      C="Gray";     D="Default for most processes." }
     @{ P="BelowNormal"; C="DarkGray"; D="Slightly lower than default." }
     @{ P="Idle";        C="DarkGray"; D="Runs only when CPU is otherwise idle." }
-) | ForEach-Object {
-    Write-Host ("  {0,-13} " -f $_.P) -ForegroundColor $_.C -NoNewline
-    Write-Host $_.D -ForegroundColor Gray
+)
+
+foreach ($entry in $legend) {
+    Write-Host ("  {0,-13} " -f $entry.P) -ForegroundColor $entry.C -NoNewline
+    Write-Host $entry.D -ForegroundColor Gray
 }
 
 Write-Host ""

@@ -8,20 +8,20 @@
 #Requires -Version 5.1
 
 # ---------------------------------------------------------------------------
-# CONFIGURATION — edit these values to suit your system
+# CONFIGURATION - edit these values to suit your system
 # ---------------------------------------------------------------------------
 
 # Steam App ID for Le Mans Ultimate
-$SteamAppId = "1537430"
+$SteamAppId = "2399420"
 
 # Path to Steam executable (update if Steam is installed elsewhere)
-$SteamExe = "C:\Program Files (x86)\Steam\steam.exe"
+$SteamExe = "D:\Steam\steam.exe"
 
 # Le Mans Ultimate process name (without .exe)
-$ProcessName = "LeMansUltimate"
+$ProcessName = "Le Mans Ultimate"
 
 # Process priority:  Idle | BelowNormal | Normal | AboveNormal | High | RealTime
-#   !! Avoid RealTime — it can freeze your whole system !!
+#   !! Avoid RealTime - it can freeze your whole system !!
 $TargetPriority = [System.Diagnostics.ProcessPriorityClass]::High
 
 # CPU Affinity bitmask
@@ -36,7 +36,7 @@ $TargetPriority = [System.Diagnostics.ProcessPriorityClass]::High
 #     0xFFFE  = Cores 1-15  (skip Core 0 on a 16-core system)
 #
 # Set to $null to leave affinity unchanged (OS default = all cores)
-$AffinityMask = 0xFFFE   # Cores 1-15  — adjust to your CPU core count
+$AffinityMask = 0xFFFE   # Cores 1-15 - adjust to your CPU core count
 
 # How long (seconds) to wait for the game process to appear after Steam launch
 $WaitTimeoutSec = 90
@@ -48,7 +48,7 @@ $WaitTimeoutSec = 90
 function Write-Header {
     Write-Host ""
     Write-Host "=============================================" -ForegroundColor Cyan
-    Write-Host "  Le Mans Ultimate — Priority Launcher" -ForegroundColor Cyan
+    Write-Host "  Le Mans Ultimate - Priority Launcher" -ForegroundColor Cyan
     Write-Host "=============================================" -ForegroundColor Cyan
     Write-Host ""
 }
@@ -65,7 +65,7 @@ function Get-AffinityDescription {
     for ($i = 0; $i -lt $TotalCores; $i++) {
         if ($Mask -band [long](1 -shl $i)) { $cores += $i }
     }
-    return "Cores: $($cores -join ', ')  [mask: 0x$('{0:X}' -f $Mask)]"
+    return ("Cores: {0}  [mask: 0x{1:X}]" -f ($cores -join ", "), $Mask)
 }
 
 # ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ Write-Host "[INFO] Logical CPU cores detected : $logicalCores" -ForegroundColor 
 if ($null -ne $AffinityMask) {
     $maxMask = [long]([Math]::Pow(2, $logicalCores) - 1)
     if (($AffinityMask -band $maxMask) -eq 0) {
-        Write-Host "[ERROR] AffinityMask 0x$('{0:X}' -f $AffinityMask) maps to no valid cores on this CPU." -ForegroundColor Red
+        Write-Host ("[ERROR] AffinityMask 0x{0:X} maps to no valid cores on this CPU." -f $AffinityMask) -ForegroundColor Red
         exit 1
     }
     $AffinityMask = $AffinityMask -band $maxMask   # clamp to available cores
@@ -171,5 +171,5 @@ if ($null -ne $AffinityMask) {
 
 Write-Host ""
 Write-Host "[DONE] Le Mans Ultimate is running with your custom settings." -ForegroundColor Cyan
-Write-Host "       Close this window at any time — settings persist until the game exits." -ForegroundColor Gray
+Write-Host "       Close this window at any time - settings persist until the game exits." -ForegroundColor Gray
 Write-Host ""
