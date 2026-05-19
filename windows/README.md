@@ -7,7 +7,7 @@ Windows 11 optimization and hardening scripts for a high-performance sim-racing 
 | Component | Spec |
 |---|---|
 | CPU | AMD Ryzen 7 9850X3D 4.7ghz 8-core |
-| GPU | Zotac Gaming Twin Edge OC RTX 5070 |
+| GPU | MSI Gaming Trio OC RTX 5080 |
 | Motherboard | MSI MAG X870E Tomahawk MAX WiFi PZ |
 | Memory | Corsair Vengance 32 GB DDR5-6000 CL36 (2x16) |
 | Drives | Samsung 990 EVO Plus 2tb w/MB heatsink |
