@@ -1,6 +1,6 @@
 # NVIDIA Configuration
 
-Driver settings and inspector profiles for the RTX 5070.
+Driver settings and inspector profiles for the MSI Gaming Trio OC RTX 5080.
 
 ## Driver
 
