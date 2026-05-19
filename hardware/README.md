@@ -5,7 +5,7 @@
 | Category | Part | Model | Notes |
 |---|---|---|---|
 | CPU | AMD Ryzen 9 9850X3D | — | X3D cache; keep PPT/TDC/EDC managed |
-| GPU | MSI Gaming Trio OC RTX 5080 | — | 12VHPWR connector |
+| GPU | MSI Gaming Trio OC RTX 5080 | — | GPU requires 16-pin 12V-2x6 cable (not 12VHPWR adapter) |
 | Motherboard | MSI MAG X870E Tomahawk MAX WiFi | — | BIOS ver: V1A33 |
 | RAM | DDR5 | 32GB | XMP profile: _fill in_ |
 | Case | Corsair Air 5400 | — | — |
