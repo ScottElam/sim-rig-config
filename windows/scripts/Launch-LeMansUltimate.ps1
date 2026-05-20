@@ -5,7 +5,7 @@
 #   - High Performance power plan (restores previous plan on exit)
 #   - High process priority and configurable CPU affinity
 #   - Helper apps launched before the game, closed when it exits
-#   - Monitoring loop that cleans up when the game exits
+#   - Waits for game exit (or crash) then cleans up
 #
 # Run as Administrator for best results.
 # =============================================================================
@@ -33,10 +33,11 @@ $TargetPriority = [System.Diagnostics.ProcessPriorityClass]::High
 #   The 9850X3D has 8 cores / 16 logical processors (SMT enabled).
 #
 #   NOTE: The 9850X3D is a SINGLE-CCD chip. There is no second CCD to offload
-#   OBS or helpers to. This mask only reserves LP 0 for the OS/background tasks.
+#   OBS or helpers to. This mask only excludes LP 0 from LMU's affinity,
+#   giving the OS a less-contested core for background work.
 #   AMD CPPC Preferred Cores handles the scheduling from there.
 #
-#   0xFFFE = LPs 1-15  (reserves LP 0 for OS — recommended for 9850X3D)
+#   0xFFFE = LPs 1-15  (excludes LP 0 — recommended for 9850X3D)
 #   0xFFFF = LPs 0-15  (all 16 logical processors)
 #   $null  = OS default — no affinity change applied
 $AffinityMask = 0xFFFE
@@ -81,12 +82,9 @@ $HelperApps = @(
     }
 )
 
-# Close helper apps that THIS script launched when the game exits
-# Apps that were already running before the script started are never closed
+# Close helper apps that THIS script launched when the game exits.
+# Apps that were already running before the script started are never closed.
 $CloseHelpersOnExit = $true
-
-# How often (seconds) to poll for the game process after launch
-$MonitorPollIntervalSec = 5
 
 # ---------------------------------------------------------------------------
 # HELPERS
@@ -110,14 +108,16 @@ function Get-AffinityDescription {
     param([long]$Mask, [int]$TotalLPs)
     $lps = @()
     for ($i = 0; $i -lt $TotalLPs; $i++) {
-        if ($Mask -band [long](1 -shl $i)) { $lps += $i }
+        if ($Mask -band ([long]1 -shl $i)) { $lps += $i }
     }
     return ("LPs: {0}  [mask: 0x{1:X}]" -f ($lps -join ", "), $Mask)
 }
 
-function Get-ActivePowerPlanGuid {
+function Get-ActivePowerPlan {
     $output = powercfg /getactivescheme 2>&1
-    if ($output -match 'GUID:\s+([\w-]+)') { return $matches[1] }
+    if ($output -match 'GUID:\s+([\w-]+)\s*\((.+?)\)') {
+        return [PSCustomObject]@{ Guid = $matches[1]; Name = $matches[2].Trim() }
+    }
     return $null
 }
 
@@ -131,7 +131,8 @@ function Start-HelperApp {
     param($App)
     if (-not $App.Enable) { return $false }
 
-    $alreadyRunning = Get-Process -Name $App.Process -ErrorAction SilentlyContinue
+    $alreadyRunning = Get-Process -Name $App.Process -ErrorAction SilentlyContinue |
+                      Select-Object -First 1
     if ($alreadyRunning) {
         Write-Host "[INFO] $($App.Name) is already running — skipping launch." -ForegroundColor Gray
         return $false   # did not launch it — do not close it on exit
@@ -143,7 +144,10 @@ function Start-HelperApp {
     }
 
     try {
-        Start-Process -FilePath $App.Path
+        $proc = Start-Process -FilePath $App.Path `
+                              -WorkingDirectory (Split-Path $App.Path) `
+                              -PassThru
+        $App['StartedProcess'] = $proc
         Write-Host "[OK]   Launched          : $($App.Name)" -ForegroundColor Green
         return $true    # launched by this script — eligible for close on exit
     }
@@ -155,7 +159,16 @@ function Start-HelperApp {
 
 function Stop-HelperApp {
     param($App)
-    $proc = Get-Process -Name $App.Process -ErrorAction SilentlyContinue
+    # Prefer the stored process object so we don't accidentally kill a
+    # different process that happens to share the same name.
+    $proc = $null
+    if ($App.StartedProcess -and -not $App.StartedProcess.HasExited) {
+        $proc = $App.StartedProcess
+    } else {
+        $proc = Get-Process -Name $App.Process -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+    }
+
     if ($proc) {
         try {
             $proc | Stop-Process -Force
@@ -189,8 +202,12 @@ if (-not (Test-Path $SteamExe)) {
 }
 
 # --- Power plan ---
-$previousPlanGuid = Get-ActivePowerPlanGuid
-Write-Host "[INFO] Current power plan : $previousPlanGuid" -ForegroundColor Gray
+$previousPlan = Get-ActivePowerPlan
+if ($previousPlan) {
+    Write-Host "[INFO] Current power plan : $($previousPlan.Name) ($($previousPlan.Guid))" -ForegroundColor Gray
+} else {
+    Write-Host "[WARN] Could not read current power plan." -ForegroundColor Yellow
+}
 Set-PowerPlan -Guid $HighPerfPlanGuid -Label "High Performance ($HighPerfPlanGuid)"
 Write-Host ""
 
@@ -223,7 +240,8 @@ Write-Host "[INFO] Target process priority     : $TargetPriority" -ForegroundCol
 Write-Host ""
 
 # --- Launch or attach to game ---
-$existing = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+$existing = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+            Select-Object -First 1
 if ($existing) {
     Write-Host "[INFO] Le Mans Ultimate is already running (PID $($existing.Id))." -ForegroundColor Yellow
     Write-Host "       Applying settings to the existing process..." -ForegroundColor Yellow
@@ -239,7 +257,8 @@ if ($existing) {
     while ($elapsed -lt $WaitTimeoutSec) {
         Start-Sleep -Seconds $interval
         $elapsed += $interval
-        $gameProcess = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+        $gameProcess = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+                       Select-Object -First 1
         if ($gameProcess) { break }
         Write-Host "  ... still waiting ($elapsed s)" -ForegroundColor DarkGray
     }
@@ -251,7 +270,8 @@ if ($existing) {
     }
 }
 
-$gameProcess = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+$gameProcess = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+               Select-Object -First 1
 if (-not $gameProcess) {
     Write-Host "[ERROR] Could not find process '$ProcessName'." -ForegroundColor Red
     exit 1
@@ -281,27 +301,24 @@ if ($null -ne $AffinityMask) {
 }
 
 # ---------------------------------------------------------------------------
-# MONITOR — stay alive until LMU exits, then clean up
+# MONITOR — block until LMU exits (or crashes), then clean up
 # ---------------------------------------------------------------------------
 
 Write-Host ""
 Write-Host "[INFO] Monitoring session. This window will clean up when LMU exits." -ForegroundColor Cyan
+Write-Host "       LMU crashes on exit — this is expected; cleanup will still run." -ForegroundColor Gray
 Write-Host "       Close this window early to skip cleanup." -ForegroundColor Gray
 Write-Host ""
 
-while ($true) {
-    Start-Sleep -Seconds $MonitorPollIntervalSec
-    $stillRunning = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
-    if (-not $stillRunning) { break }
-}
+$gameProcess.WaitForExit()
 
 Write-Host ""
 Write-Host "[INFO] Le Mans Ultimate has exited. Running cleanup..." -ForegroundColor Yellow
 Write-Host ""
 
 # --- Restore power plan ---
-if ($RestorePowerPlanOnExit -and $previousPlanGuid) {
-    Set-PowerPlan -Guid $previousPlanGuid -Label "Previous plan ($previousPlanGuid)"
+if ($RestorePowerPlanOnExit -and $previousPlan) {
+    Set-PowerPlan -Guid $previousPlan.Guid -Label "$($previousPlan.Name) ($($previousPlan.Guid))"
 } else {
     Write-Host "[INFO] Power plan left at High Performance." -ForegroundColor Gray
 }
@@ -312,7 +329,9 @@ if ($CloseHelpersOnExit -and $launchedHelpers.Count -gt 0) {
     foreach ($app in $launchedHelpers) {
         Stop-HelperApp -App $app
     }
-} elseif ($launchedHelpers.Count -eq 0) {
+} elseif (-not $CloseHelpersOnExit) {
+    Write-Host "[INFO] Helper app cleanup skipped (CloseHelpersOnExit = false)." -ForegroundColor Gray
+} else {
     Write-Host "[INFO] No helper apps to close (none were launched by this script)." -ForegroundColor Gray
 }
 
