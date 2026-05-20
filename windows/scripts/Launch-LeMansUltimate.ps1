@@ -25,18 +25,22 @@ $ProcessName = "Le Mans Ultimate"
 $TargetPriority = [System.Diagnostics.ProcessPriorityClass]::High
 
 # CPU Affinity bitmask
-#   Each bit = one logical CPU core (bit 0 = Core 0, bit 1 = Core 1, etc.)
+#   Each bit = one logical processor (bit 0 = LP 0, bit 1 = LP 1, etc.)
+#   The 9850X3D has 8 cores / 16 logical processors (SMT enabled).
+#
 #   Examples (hex):
-#     0x0003  = Cores 0-1   (2 cores)
-#     0x00FF  = Cores 0-7   (8 cores)
-#     0xFFFF  = Cores 0-15  (16 cores)
-#     0xFFFFFFFF = All 32 logical cores
+#     0x0003  = LPs 0-1    (2 logical processors)
+#     0x00FF  = LPs 0-7    (8 logical processors)
+#     0xFFFE  = LPs 1-15   (15 of 16 — skips LP 0 for OS/background)
+#     0xFFFF  = LPs 0-15   (all 16 logical processors)
 #
-#   Tip: exclude Core 0 to leave it free for Windows/background tasks:
-#     0xFFFE  = Cores 1-15  (skip Core 0 on a 16-core system)
+#   NOTE: The 9850X3D is a SINGLE-CCD chip. There is no second CCD to
+#   "offload" OBS to. The affinity mask here is only used to reserve
+#   LP 0 for Windows and background tasks — not for CCD separation.
+#   AMD CPPC Preferred Cores handles the scheduling correctly from there.
 #
-# Set to $null to leave affinity unchanged (OS default = all cores)
-$AffinityMask = 0xFFFE   # Cores 1-15 - adjust to your CPU core count
+# Set to $null to leave affinity unchanged (OS default = all logical processors)
+$AffinityMask = 0xFFFE   # LPs 1-15 — reserves LP 0 for OS/background tasks
 
 # How long (seconds) to wait for the game process to appear after Steam launch
 $WaitTimeoutSec = 90
