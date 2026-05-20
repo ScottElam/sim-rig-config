@@ -93,7 +93,6 @@ $ToDisable = @(
     @{ Name = 'MapsBroker';        Reason = 'Downloaded Maps Manager -- not used' },
     @{ Name = 'SysMain';           Reason = 'Superfetch -- counterproductive on NVMe' },
     @{ Name = 'WSAIFabricSvc';     Reason = 'Windows AI Fabric -- Copilot infrastructure' },
-    @{ Name = 'whesvc';            Reason = 'Windows Health & Optimized Experiences -- telemetry' },
     @{ Name = 'CMigrationService'; Reason = 'OS migration remnant -- should not run perpetually' },
     @{ Name = 'SCardSvr';          Reason = 'Smart Card -- no reader in this build' },
     @{ Name = 'ScDeviceEnum';      Reason = 'Smart Card Device Enumeration' },
@@ -103,11 +102,11 @@ $ToDisable = @(
 )
 
 $ToManual = @(
+    @{ Name = 'whesvc';                        Reason = 'Windows Health & Optimized Experiences -- telemetry' },
     @{ Name = 'brave';                         Reason = 'Brave auto-updater -- on-demand sufficient' },
     @{ Name = 'edgeupdate';                    Reason = 'Edge auto-updater -- on-demand sufficient' },
     @{ Name = 'GoogleUpdaterInternalService*'; Reason = 'Chrome internal updater -- on-demand sufficient' },
     @{ Name = 'GoogleUpdaterService*';         Reason = 'Chrome updater -- on-demand sufficient' },
-    @{ Name = 'InventorySvc';                  Reason = 'Inventory & Compatibility Appraisal -- telemetry-adjacent' },
     @{ Name = 'PcaSvc';                        Reason = 'Program Compatibility Assistant -- not needed at startup' },
     @{ Name = 'TrkWks';                        Reason = 'Distributed Link Tracking -- low value, background I/O' },
     @{ Name = 'WSearch';                       Reason = 'Windows Search indexer -- I/O spikes during gaming' }
