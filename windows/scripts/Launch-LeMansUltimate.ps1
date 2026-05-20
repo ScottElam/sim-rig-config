@@ -1,7 +1,12 @@
 # =============================================================================
 # Launch-LeMansUltimate.ps1
-# Launches Le Mans Ultimate via Steam with High process priority and
-# a configurable CPU affinity mask.
+#
+# Launches Le Mans Ultimate via Steam with:
+#   - High Performance power plan (restores previous plan on exit)
+#   - High process priority and configurable CPU affinity
+#   - Helper apps launched before the game, closed when it exits
+#   - Waits for game exit (or crash) then cleans up
+#
 # Run as Administrator for best results.
 # =============================================================================
 
@@ -11,35 +16,75 @@
 # CONFIGURATION - edit these values to suit your system
 # ---------------------------------------------------------------------------
 
-# Steam App ID for Le Mans Ultimate
-$SteamAppId = "2399420"
+# --- Steam / Game ---
 
-# Path to Steam executable (update if Steam is installed elsewhere)
-$SteamExe = "D:\Steam\steam.exe"
+$SteamAppId     = "2399420"
+$SteamExe       = "D:\Steam\steam.exe"
+$ProcessName    = "Le Mans Ultimate"
+$WaitTimeoutSec = 90
 
-# Le Mans Ultimate process name (without .exe)
-$ProcessName = "Le Mans Ultimate"
+# --- Process priority and CPU affinity ---
 
-# Process priority:  Idle | BelowNormal | Normal | AboveNormal | High | RealTime
-#   !! Avoid RealTime - it can freeze your whole system !!
+# Priority: Idle | BelowNormal | Normal | AboveNormal | High | RealTime
+#   !! Avoid RealTime — it can freeze the whole system !!
 $TargetPriority = [System.Diagnostics.ProcessPriorityClass]::High
 
-# CPU Affinity bitmask
-#   Each bit = one logical CPU core (bit 0 = Core 0, bit 1 = Core 1, etc.)
-#   Examples (hex):
-#     0x0003  = Cores 0-1   (2 cores)
-#     0x00FF  = Cores 0-7   (8 cores)
-#     0xFFFF  = Cores 0-15  (16 cores)
-#     0xFFFFFFFF = All 32 logical cores
+# CPU Affinity bitmask — each bit = one logical processor (LP 0 = bit 0, etc.)
+#   The 9850X3D has 8 cores / 16 logical processors (SMT enabled).
 #
-#   Tip: exclude Core 0 to leave it free for Windows/background tasks:
-#     0xFFFE  = Cores 1-15  (skip Core 0 on a 16-core system)
+#   NOTE: The 9850X3D is a SINGLE-CCD chip. There is no second CCD to offload
+#   OBS or helpers to. This mask only excludes LP 0 from LMU's affinity,
+#   giving the OS a less-contested core for background work.
+#   AMD CPPC Preferred Cores handles the scheduling from there.
 #
-# Set to $null to leave affinity unchanged (OS default = all cores)
-$AffinityMask = 0xFFFE   # Cores 1-15 - adjust to your CPU core count
+#   0xFFFE = LPs 1-15  (excludes LP 0 — recommended for 9850X3D)
+#   0xFFFF = LPs 0-15  (all 16 logical processors)
+#   $null  = OS default — no affinity change applied
+$AffinityMask = 0xFFFE
 
-# How long (seconds) to wait for the game process to appear after Steam launch
-$WaitTimeoutSec = 90
+# --- Power plan ---
+
+# High Performance plan GUID (built-in Windows — do not change)
+$HighPerfPlanGuid  = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+
+# Restore the previous power plan when the game exits
+$RestorePowerPlanOnExit = $true
+
+# --- Helper applications ---
+# Enable  : $true to launch this app, $false to skip
+# Path    : Full path to the executable
+# Process : Process name (without .exe) used to check if already running
+
+$HelperApps = @(
+    @{
+        Name    = 'CrewChief'
+        Enable  = $true
+        Path    = 'C:\Program Files (x86)\CrewChiefV4\CrewChiefV4.exe'
+        Process = 'CrewChiefV4'
+    },
+    @{
+        Name    = 'TinyPedal'
+        Enable  = $true
+        Path    = 'D:\TinyPedal\TinyPedal.exe'
+        Process = 'TinyPedal'
+    },
+    @{
+        Name    = 'Coach Dave Academy'
+        Enable  = $true
+        Path    = 'C:\Program Files\Coach Dave Academy\CoachDaveAcademy.exe'
+        Process = 'CoachDaveAcademy'
+    },
+    @{
+        Name    = 'OBS'
+        Enable  = $false   # Set to $true to include OBS in the launch sequence
+        Path    = 'C:\Program Files\obs-studio\bin\64bit\obs64.exe'
+        Process = 'obs64'
+    }
+)
+
+# Close helper apps that THIS script launched when the game exits.
+# Apps that were already running before the script started are never closed.
+$CloseHelpersOnExit = $true
 
 # ---------------------------------------------------------------------------
 # HELPERS
@@ -48,24 +93,91 @@ $WaitTimeoutSec = 90
 function Write-Header {
     Write-Host ""
     Write-Host "=============================================" -ForegroundColor Cyan
-    Write-Host "  Le Mans Ultimate - Priority Launcher" -ForegroundColor Cyan
+    Write-Host "  Le Mans Ultimate - Session Launcher" -ForegroundColor Cyan
     Write-Host "=============================================" -ForegroundColor Cyan
     Write-Host ""
 }
 
 function Test-Admin {
-    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal   = New-Object Security.Principal.WindowsPrincipal($currentUser)
-    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    $cu = [Security.Principal.WindowsIdentity]::GetCurrent()
+    return (New-Object Security.Principal.WindowsPrincipal($cu)).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
 function Get-AffinityDescription {
-    param([long]$Mask, [int]$TotalCores)
-    $cores = @()
-    for ($i = 0; $i -lt $TotalCores; $i++) {
-        if ($Mask -band [long](1 -shl $i)) { $cores += $i }
+    param([long]$Mask, [int]$TotalLPs)
+    $lps = @()
+    for ($i = 0; $i -lt $TotalLPs; $i++) {
+        if ($Mask -band ([long]1 -shl $i)) { $lps += $i }
     }
-    return ("Cores: {0}  [mask: 0x{1:X}]" -f ($cores -join ", "), $Mask)
+    return ("LPs: {0}  [mask: 0x{1:X}]" -f ($lps -join ", "), $Mask)
+}
+
+function Get-ActivePowerPlan {
+    $output = powercfg /getactivescheme 2>&1
+    if ($output -match 'GUID:\s+([\w-]+)\s*\((.+?)\)') {
+        return [PSCustomObject]@{ Guid = $matches[1]; Name = $matches[2].Trim() }
+    }
+    return $null
+}
+
+function Set-PowerPlan {
+    param([string]$Guid, [string]$Label)
+    powercfg /setactive $Guid 2>&1 | Out-Null
+    Write-Host "[OK]   Power plan set    : $Label" -ForegroundColor Green
+}
+
+function Start-HelperApp {
+    param($App)
+    if (-not $App.Enable) { return $false }
+
+    $alreadyRunning = Get-Process -Name $App.Process -ErrorAction SilentlyContinue |
+                      Select-Object -First 1
+    if ($alreadyRunning) {
+        Write-Host "[INFO] $($App.Name) is already running — skipping launch." -ForegroundColor Gray
+        return $false   # did not launch it — do not close it on exit
+    }
+
+    if (-not (Test-Path $App.Path)) {
+        Write-Host "[WARN] $($App.Name) not found at: $($App.Path)" -ForegroundColor Yellow
+        return $false
+    }
+
+    try {
+        $proc = Start-Process -FilePath $App.Path `
+                              -WorkingDirectory (Split-Path $App.Path) `
+                              -PassThru
+        $App['StartedProcess'] = $proc
+        Write-Host "[OK]   Launched          : $($App.Name)" -ForegroundColor Green
+        return $true    # launched by this script — eligible for close on exit
+    }
+    catch {
+        Write-Host "[WARN] Could not launch $($App.Name): $_" -ForegroundColor Yellow
+        return $false
+    }
+}
+
+function Stop-HelperApp {
+    param($App)
+    # Prefer the stored process object so we don't accidentally kill a
+    # different process that happens to share the same name.
+    $proc = $null
+    if ($App.StartedProcess -and -not $App.StartedProcess.HasExited) {
+        $proc = $App.StartedProcess
+    } else {
+        $proc = Get-Process -Name $App.Process -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+    }
+
+    if ($proc) {
+        try {
+            $proc | Stop-Process -Force
+            Write-Host "[OK]   Closed            : $($App.Name)" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "[WARN] Could not close $($App.Name): $_" -ForegroundColor Yellow
+        }
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -89,45 +201,64 @@ if (-not (Test-Path $SteamExe)) {
     exit 1
 }
 
-# System CPU info
+# --- Power plan ---
+$previousPlan = Get-ActivePowerPlan
+if ($previousPlan) {
+    Write-Host "[INFO] Current power plan : $($previousPlan.Name) ($($previousPlan.Guid))" -ForegroundColor Gray
+} else {
+    Write-Host "[WARN] Could not read current power plan." -ForegroundColor Yellow
+}
+Set-PowerPlan -Guid $HighPerfPlanGuid -Label "High Performance ($HighPerfPlanGuid)"
+Write-Host ""
+
+# --- Helper apps ---
+Write-Host "[INFO] Starting helper applications..." -ForegroundColor Cyan
+$launchedHelpers = @()
+foreach ($app in $HelperApps) {
+    $wasLaunched = Start-HelperApp -App $app
+    if ($wasLaunched) { $launchedHelpers += $app }
+}
+Write-Host ""
+
+# --- System CPU info ---
 $logicalCores = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
-Write-Host "[INFO] Logical CPU cores detected : $logicalCores" -ForegroundColor Gray
+Write-Host "[INFO] Logical processors detected : $logicalCores" -ForegroundColor Gray
 
 if ($null -ne $AffinityMask) {
     $maxMask = [long]([Math]::Pow(2, $logicalCores) - 1)
     if (($AffinityMask -band $maxMask) -eq 0) {
-        Write-Host ("[ERROR] AffinityMask 0x{0:X} maps to no valid cores on this CPU." -f $AffinityMask) -ForegroundColor Red
+        Write-Host ("[ERROR] AffinityMask 0x{0:X} maps to no valid LPs on this CPU." -f $AffinityMask) -ForegroundColor Red
         exit 1
     }
-    $AffinityMask = $AffinityMask -band $maxMask   # clamp to available cores
-    Write-Host "[INFO] Target CPU affinity        : $(Get-AffinityDescription $AffinityMask $logicalCores)" -ForegroundColor Gray
+    $AffinityMask = $AffinityMask -band $maxMask
+    Write-Host "[INFO] Target CPU affinity         : $(Get-AffinityDescription $AffinityMask $logicalCores)" -ForegroundColor Gray
 } else {
-    Write-Host "[INFO] Target CPU affinity        : OS default (all cores)" -ForegroundColor Gray
+    Write-Host "[INFO] Target CPU affinity         : OS default (all LPs)" -ForegroundColor Gray
 }
 
-Write-Host "[INFO] Target process priority    : $TargetPriority" -ForegroundColor Gray
+Write-Host "[INFO] Target process priority     : $TargetPriority" -ForegroundColor Gray
 Write-Host ""
 
-# Check if game is already running
-$existing = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+# --- Launch or attach to game ---
+$existing = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+            Select-Object -First 1
 if ($existing) {
     Write-Host "[INFO] Le Mans Ultimate is already running (PID $($existing.Id))." -ForegroundColor Yellow
     Write-Host "       Applying settings to the existing process..." -ForegroundColor Yellow
 } else {
-    # Launch via Steam
     Write-Host "[INFO] Launching Le Mans Ultimate via Steam..." -ForegroundColor Green
     Start-Process -FilePath $SteamExe -ArgumentList "-applaunch $SteamAppId"
 
-    # Wait for the game process to appear
     Write-Host "[INFO] Waiting up to $WaitTimeoutSec seconds for process '$ProcessName'..." -ForegroundColor Gray
-    $elapsed = 0
-    $interval = 2
+    $elapsed     = 0
+    $interval    = 2
     $gameProcess = $null
 
     while ($elapsed -lt $WaitTimeoutSec) {
         Start-Sleep -Seconds $interval
         $elapsed += $interval
-        $gameProcess = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+        $gameProcess = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+                       Select-Object -First 1
         if ($gameProcess) { break }
         Write-Host "  ... still waiting ($elapsed s)" -ForegroundColor DarkGray
     }
@@ -139,8 +270,8 @@ if ($existing) {
     }
 }
 
-# Re-fetch in case $existing was used
-$gameProcess = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+$gameProcess = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+               Select-Object -First 1
 if (-not $gameProcess) {
     Write-Host "[ERROR] Could not find process '$ProcessName'." -ForegroundColor Red
     exit 1
@@ -149,19 +280,19 @@ if (-not $gameProcess) {
 Write-Host ""
 Write-Host "[INFO] Found process: $ProcessName  (PID: $($gameProcess.Id))" -ForegroundColor Green
 
-# --- Set Priority ---
+# --- Priority ---
 try {
     $gameProcess.PriorityClass = $TargetPriority
-    Write-Host "[OK]   Priority set to : $($gameProcess.PriorityClass)" -ForegroundColor Green
+    Write-Host "[OK]   Priority set to   : $($gameProcess.PriorityClass)" -ForegroundColor Green
 } catch {
     Write-Host "[WARN] Could not set priority: $_" -ForegroundColor Yellow
 }
 
-# --- Set CPU Affinity ---
+# --- Affinity ---
 if ($null -ne $AffinityMask) {
     try {
         $gameProcess.ProcessorAffinity = [IntPtr]$AffinityMask
-        Write-Host "[OK]   CPU affinity set: $(Get-AffinityDescription $AffinityMask $logicalCores)" -ForegroundColor Green
+        Write-Host "[OK]   CPU affinity set  : $(Get-AffinityDescription $AffinityMask $logicalCores)" -ForegroundColor Green
     } catch {
         Write-Host "[WARN] Could not set CPU affinity: $_" -ForegroundColor Yellow
     }
@@ -169,7 +300,41 @@ if ($null -ne $AffinityMask) {
     Write-Host "[INFO] CPU affinity left at OS default." -ForegroundColor Gray
 }
 
+# ---------------------------------------------------------------------------
+# MONITOR — block until LMU exits (or crashes), then clean up
+# ---------------------------------------------------------------------------
+
 Write-Host ""
-Write-Host "[DONE] Le Mans Ultimate is running with your custom settings." -ForegroundColor Cyan
-Write-Host "       Close this window at any time - settings persist until the game exits." -ForegroundColor Gray
+Write-Host "[INFO] Monitoring session. This window will clean up when LMU exits." -ForegroundColor Cyan
+Write-Host "       LMU crashes on exit — this is expected; cleanup will still run." -ForegroundColor Gray
+Write-Host "       Close this window early to skip cleanup." -ForegroundColor Gray
+Write-Host ""
+
+$gameProcess.WaitForExit()
+
+Write-Host ""
+Write-Host "[INFO] Le Mans Ultimate has exited. Running cleanup..." -ForegroundColor Yellow
+Write-Host ""
+
+# --- Restore power plan ---
+if ($RestorePowerPlanOnExit -and $previousPlan) {
+    Set-PowerPlan -Guid $previousPlan.Guid -Label "$($previousPlan.Name) ($($previousPlan.Guid))"
+} else {
+    Write-Host "[INFO] Power plan left at High Performance." -ForegroundColor Gray
+}
+
+# --- Close helpers that this script launched ---
+if ($CloseHelpersOnExit -and $launchedHelpers.Count -gt 0) {
+    Write-Host "[INFO] Closing helper applications..." -ForegroundColor Cyan
+    foreach ($app in $launchedHelpers) {
+        Stop-HelperApp -App $app
+    }
+} elseif (-not $CloseHelpersOnExit) {
+    Write-Host "[INFO] Helper app cleanup skipped (CloseHelpersOnExit = false)." -ForegroundColor Gray
+} else {
+    Write-Host "[INFO] No helper apps to close (none were launched by this script)." -ForegroundColor Gray
+}
+
+Write-Host ""
+Write-Host "[DONE] Session ended cleanly." -ForegroundColor Cyan
 Write-Host ""
