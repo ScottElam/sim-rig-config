@@ -139,12 +139,18 @@ Key variables at the top of the script:
 
 **Affinity mask quick reference** (adjust upper bound to your logical core count):
 
-| Mask | Cores assigned |
-|---|---|
-| `0xFFFE` | Cores 1–15 — skips Core 0, leaving it free for Windows/background (recommended for 9850X3D) |
-| `0xFFFF` | Cores 0–15 (all 16 cores) |
-| `0x00FF` | Cores 0–7 (P-cores only on a hybrid layout) |
-| `$null` | OS default — no affinity change applied |
+| Mask | Logical processors assigned | Notes |
+|---|---|---|
+| `0xFFFE` | LPs 1–15 (of 16) | Skips LP 0 for OS/background — default for 9850X3D |
+| `0xFFFF` | LPs 0–15 (all 16) | All logical processors |
+| `0x00FF` | LPs 0–7 | P-cores only on a hybrid-architecture CPU |
+| `$null` | OS default | No affinity change applied |
+
+> **9850X3D note:** This chip has a **single CCD** with 8 cores / 16 logical processors.
+> The `0xFFFE` mask reserves LP 0 for the OS — it is **not** a CCD separation strategy.
+> CCD-based OBS/LMU affinity splitting (cores 0–15 vs 16–31) only applies to dual-CCD
+> chips like the 9950X3D or 9900X3D. AMD CPPC Preferred Cores handles thread prioritisation
+> correctly on the 9850X3D without any manual affinity pinning.
 
 ```powershell
 .\Utilities\Launch-LeMansUltimate.ps1
