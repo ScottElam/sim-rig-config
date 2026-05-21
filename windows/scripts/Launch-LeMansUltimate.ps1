@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # Launch-LeMansUltimate.ps1
 #
 # Launches Le Mans Ultimate via Steam with:
@@ -59,7 +59,7 @@ $HelperApps = @(
     @{
         Name    = 'CrewChief'
         Enable  = $true
-        Path    = 'C:\Program Files (x86)\CrewChiefV4\CrewChiefV4.exe'
+        Path    = 'D:\CrewChiefV4\CrewChiefV4.exe'
         Process = 'CrewChiefV4'
     },
     @{
@@ -69,15 +69,15 @@ $HelperApps = @(
         Process = 'TinyPedal'
     },
     @{
-        Name    = 'Coach Dave Academy'
+        Name    = 'Coach Dave Delta'
         Enable  = $true
-        Path    = 'C:\Program Files\Coach Dave Academy\CoachDaveAcademy.exe'
-        Process = 'CoachDaveAcademy'
+        Path    = 'C:\Users\selam\AppData\Local\CoachDaveDelta\Coach Dave Delta.exe'
+        Process = 'Coach Dave Delta'
     },
     @{
         Name    = 'OBS'
         Enable  = $false   # Set to $true to include OBS in the launch sequence
-        Path    = 'C:\Program Files\obs-studio\bin\64bit\obs64.exe'
+        Path    = 'D:\obs\obs-studio\bin\64bit\obs64.exe'
         Process = 'obs64'
     }
 )
@@ -85,6 +85,7 @@ $HelperApps = @(
 # Close helper apps that THIS script launched when the game exits.
 # Apps that were already running before the script started are never closed.
 $CloseHelpersOnExit = $true
+
 
 # ---------------------------------------------------------------------------
 # HELPERS
@@ -134,7 +135,7 @@ function Start-HelperApp {
     $alreadyRunning = Get-Process -Name $App.Process -ErrorAction SilentlyContinue |
                       Select-Object -First 1
     if ($alreadyRunning) {
-        Write-Host "[INFO] $($App.Name) is already running — skipping launch." -ForegroundColor Gray
+        Write-Host "[INFO] $($App.Name) is already running - skipping launch." -ForegroundColor Gray
         return $false   # did not launch it — do not close it on exit
     }
 
@@ -159,19 +160,19 @@ function Start-HelperApp {
 
 function Stop-HelperApp {
     param($App)
-    # Prefer the stored process object so we don't accidentally kill a
-    # different process that happens to share the same name.
-    $proc = $null
+    # Collect the stored process handle (if still alive) plus every running
+    # process that matches the name, then deduplicate by PID.
+    # This handles Electron-style apps that spawn multiple child processes.
+    $targets = @()
     if ($App.StartedProcess -and -not $App.StartedProcess.HasExited) {
-        $proc = $App.StartedProcess
-    } else {
-        $proc = Get-Process -Name $App.Process -ErrorAction SilentlyContinue |
-                Select-Object -First 1
+        $targets += $App.StartedProcess
     }
+    $targets += @(Get-Process -Name $App.Process -ErrorAction SilentlyContinue)
+    $targets = $targets | Sort-Object Id -Unique
 
-    if ($proc) {
+    if ($targets) {
         try {
-            $proc | Stop-Process -Force
+            $targets | Stop-Process -Force
             Write-Host "[OK]   Closed            : $($App.Name)" -ForegroundColor Green
         }
         catch {
@@ -306,7 +307,7 @@ if ($null -ne $AffinityMask) {
 
 Write-Host ""
 Write-Host "[INFO] Monitoring session. This window will clean up when LMU exits." -ForegroundColor Cyan
-Write-Host "       LMU crashes on exit — this is expected; cleanup will still run." -ForegroundColor Gray
+Write-Host "       LMU crashes on exit -- this is expected; cleanup will still run." -ForegroundColor Gray
 Write-Host "       Close this window early to skip cleanup." -ForegroundColor Gray
 Write-Host ""
 
